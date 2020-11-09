@@ -9,86 +9,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityTransaction;
 
 public class UserDB {
 
-    public int insert(User user) throws NotesDBException {
-        ConnectionPool pool = ConnectionPool.getInstance();
-        Connection connection = pool.getConnection();
-
-        try {
-            String preparedQuery = "INSERT INTO users (username, password, firstname, lastname, email) VALUES (?, ?, ?, ?, ?)";
-            PreparedStatement ps = connection.prepareStatement(preparedQuery);
-            ps.setString(1, user.getUsername());
-            ps.setString(2, user.getPassword());
-            ps.setString(3, user.getFirstname());
-            ps.setString(4, user.getLastname());
-            ps.setString(5, user.getEmail());
-            int rows = ps.executeUpdate();
-            return rows;
-        } catch (SQLException ex) {
-            Logger.getLogger(UserDB.class.getName()).log(Level.SEVERE, "Cannot insert " + user.toString(), ex);
-            throw new NotesDBException("Error inserting user");
-        } finally {
-            pool.freeConnection(connection);
-        }
-    }
-
-    public int update(User user) throws NotesDBException {
-        ConnectionPool pool = ConnectionPool.getInstance();
-        Connection connection = pool.getConnection();
-
-        try {
-            String preparedSQL = "UPDATE users SET password = ?, firstname = ?, lastname = ?, email = ? WHERE username = ?";
-
-            PreparedStatement ps = connection.prepareStatement(preparedSQL);
-
-            ps.setString(1, user.getPassword());
-            ps.setString(2, user.getFirstname());
-            ps.setString(3, user.getLastname());
-            ps.setString(4, user.getEmail());
-            ps.setString(5, user.getUsername());
-
-            int rows = ps.executeUpdate();
-            return rows;
-        } catch (SQLException ex) {
-            Logger.getLogger(UserDB.class.getName()).log(Level.SEVERE, "Cannot update " + user.toString(), ex);
-            throw new NotesDBException("Error updating user");
-        } finally {
-            pool.freeConnection(connection);
-        }
-    }
-
     public List<User> getAll() throws NotesDBException {
-        ConnectionPool pool = ConnectionPool.getInstance();
-        Connection connection = pool.getConnection();
-
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-
+        EntityManager em = DBUtil.getEmFactory().createEntityManager();
         try {
-            ps = connection.prepareStatement("SELECT * FROM users;");
-            rs = ps.executeQuery();
-            List<User> users = new ArrayList<>();
-            while (rs.next()) {
-                users.add(new User(rs.getString("username"),
-                        rs.getString("password"),
-                        rs.getString("firstname"),
-                        rs.getString("lastname"),
-                        rs.getString("email")));
-            }
-            pool.freeConnection(connection);
+            List<User> users = em.createNamedQuery("User.findAll", User.class).getResultList();
             return users;
-        } catch (SQLException ex) {
-            Logger.getLogger(UserDB.class.getName()).log(Level.SEVERE, "Cannot read users", ex);
-            throw new NotesDBException("Error getting Users");
         } finally {
-            try {
-                rs.close();
-                ps.close();
-            } catch (SQLException ex) {
-            }
-            pool.freeConnection(connection);
+            em.close();
         }
     }
 
@@ -100,56 +32,55 @@ public class UserDB {
      * @throws NotesDBException
      */
     public User getUser(String username) throws NotesDBException {
-        ConnectionPool pool = ConnectionPool.getInstance();
-        Connection connection = pool.getConnection();
-        String selectSQL = "SELECT * FROM users WHERE username = ?";
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-
+        EntityManager em = DBUtil.getEmFactory().createEntityManager();
         try {
-            ps = connection.prepareStatement(selectSQL);
-            ps.setString(1, username);
-            rs = ps.executeQuery();
-
-            User user = null;
-            while (rs.next()) {
-                user = new User(rs.getString("username"),
-                        rs.getString("password"),
-                        rs.getString("firstname"),
-                        rs.getString("lastname"),
-                        rs.getString("email"));
-            }
-            pool.freeConnection(connection);
+            User user = em.find(User.class, username);
             return user;
-        } catch (SQLException ex) {
-            Logger.getLogger(UserDB.class.getName()).log(Level.SEVERE, "Cannot read users", ex);
-            throw new NotesDBException("Error getting Users");
         } finally {
-            try {
-                rs.close();
-                ps.close();
-            } catch (SQLException ex) {
-            }
-            pool.freeConnection(connection);
+            em.close();
         }
     }
 
-    public int delete(User user) throws NotesDBException {
-        ConnectionPool pool = ConnectionPool.getInstance();
-        Connection connection = pool.getConnection();
-        String preparedQuery = "DELETE FROM users WHERE username = ?";
-        PreparedStatement ps;
-
+    public void insert(User user) throws NotesDBException {
+        EntityManager em = DBUtil.getEmFactory().createEntityManager();
+        EntityTransaction tran = em.getTransaction();
         try {
-            ps = connection.prepareStatement(preparedQuery);
-            ps.setString(1, user.getUsername());
-            int rows = ps.executeUpdate();
-            return rows;
-        } catch (SQLException ex) {
-            Logger.getLogger(UserDB.class.getName()).log(Level.SEVERE, "Cannot delete " + user.toString(), ex);
-            throw new NotesDBException("Error deleting User");
+            tran.begin();
+            em.merge(tran);
+            tran.commit();
+        }catch(Exception e){
+            tran.rollback();
         } finally {
-            pool.freeConnection(connection);
+            em.close();
+        }
+    }
+
+    public void update(User user) throws NotesDBException {
+        EntityManager em = DBUtil.getEmFactory().createEntityManager();
+        EntityTransaction tran = em.getTransaction();
+        try {
+            tran.begin();
+            em.merge(user);
+            tran.commit();
+        } catch (Exception e){
+            tran.rollback();
+        } finally {
+            em.close();
+        }
+    }
+    
+    public void delete(User user) throws NotesDBException {
+        EntityManager em = DBUtil.getEmFactory().createEntityManager();
+        EntityTransaction tran = em.getTransaction();
+        try {
+            tran.begin();
+            em.remove(user);
+            em.merge(user);
+            tran.commit();
+        } catch (Exception e){
+            tran.rollback();
+        } finally {
+            em.close();
         }
     }
 }
